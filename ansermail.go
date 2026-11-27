@@ -2,11 +2,11 @@
 //
 //	client := ansermail.NewClient("ms_…")
 //	email, err := client.Emails.Send(ctx, &ansermail.SendEmailParams{
-//		From:    "Acme <hello@acme.com>",
+//		From:    ansermail.Address{Email: "hello@acme.com", Name: "Acme"},
 //		To:      []ansermail.Address{{Email: "amy@example.com", Name: "Amy"}},
 //		Subject: "Welcome",
 //		HTML:    "<p>Hi Amy</p>",
-//		Tags:    map[string]string{"category": "welcome"},
+//		Tags:    ansermail.Tags{"category": "welcome"},
 //	})
 package ansermail
 
