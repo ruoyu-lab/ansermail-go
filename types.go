@@ -53,12 +53,16 @@ type Attachment struct {
 
 // SendEmailParams is one email. From's domain must be verified; HTML or Text, at least one; To, Cc and Bcc
 // up to 50 together; attachments up to 30 MB together.
+//
+// With Template set, the content comes from the template instead: leave HTML and Text empty; From, Subject and
+// ReplyTo may stay empty too, and when set they win over the template's.
 type SendEmailParams struct {
 	From        Address           `json:"from"`
 	To          []Address         `json:"to"`
-	Subject     string            `json:"subject"`
+	Subject     string            `json:"subject,omitempty"`
 	HTML        string            `json:"html,omitempty"`
 	Text        string            `json:"text,omitempty"`
+	Template    *TemplateRef      `json:"template,omitempty"`
 	Cc          []Address         `json:"cc,omitempty"`
 	Bcc         []Address         `json:"bcc,omitempty"`
 	ReplyTo     []Address         `json:"reply_to,omitempty"`
@@ -67,6 +71,19 @@ type SendEmailParams struct {
 	Tags        Tags              `json:"tags,omitempty"`
 	// ScheduledAt sends it later (up to 30 days).
 	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
+}
+
+// MarshalJSON leaves out an empty From, so a template's sender is used.
+func (p SendEmailParams) MarshalJSON() ([]byte, error) {
+	type params SendEmailParams
+	var from *Address
+	if p.From != (Address{}) {
+		from = &p.From
+	}
+	return json.Marshal(struct {
+		params
+		From *Address `json:"from,omitempty"`
+	}{params(p), from})
 }
 
 // SendBatchParams is up to 100 emails. Atomic (true when nil): if one is refused, none is sent and SendBatch
@@ -124,16 +141,19 @@ type EmailAttachment struct {
 // Email is a sent email in full.
 type Email struct {
 	EmailSummary
-	Cc                []string          `json:"cc"`
-	Bcc               []string          `json:"bcc"`
-	ReplyTo           []string          `json:"reply_to"`
-	HTML              *string           `json:"html"`
-	Text              *string           `json:"text"`
-	Headers           map[string]string `json:"headers"`
-	Attachments       []EmailAttachment `json:"attachments"`
-	Attempts          int               `json:"attempts"`
-	LastError         *string           `json:"last_error"`
-	ProviderMessageID *string           `json:"provider_message_id"`
+	Cc          []string          `json:"cc"`
+	Bcc         []string          `json:"bcc"`
+	ReplyTo     []string          `json:"reply_to"`
+	HTML        *string           `json:"html"`
+	Text        *string           `json:"text"`
+	Headers     map[string]string `json:"headers"`
+	Attachments []EmailAttachment `json:"attachments"`
+	// Template is the template and version it was sent with; nil when it had its own content or the template
+	// was deleted.
+	Template          *EmailTemplate `json:"template"`
+	Attempts          int            `json:"attempts"`
+	LastError         *string        `json:"last_error"`
+	ProviderMessageID *string        `json:"provider_message_id"`
 }
 
 // EmailEvent is something that happened to an email.
@@ -269,8 +289,9 @@ type ForwardingRule struct {
 
 // ---------------------------------------------------------------- domains, keys, webhooks, suppressions
 
-// DNSRecord is a record to add at your DNS host, with what the service sees there now. Purpose is dkim, mx or
-// spf (the bounce subdomain), dmarc, or receiving (the MX record that brings the domain's email in);
+// DNSRecord is a record to add at your DNS host, with what the service sees there now. Purpose is ownership (a TXT at
+// _anser.<domain> proving the domain belongs to this workspace), dkim, mx or spf (the bounce subdomain), dmarc, or
+// receiving (the MX record that brings the domain's email in);
 // Conflicts, for receiving only, are other MX servers on the domain that may get the email first.
 type DNSRecord struct {
 	Purpose   string   `json:"purpose"`
@@ -283,7 +304,7 @@ type DNSRecord struct {
 	Conflicts []string `json:"conflicts,omitempty"`
 }
 
-// Domain is a sending (and maybe receiving) domain.
+// Domain is a sending (and maybe receiving) domain. Region is the server's SES region, the same for every domain.
 type Domain struct {
 	Object        string      `json:"object"`
 	ID            string      `json:"id"`
@@ -297,6 +318,37 @@ type Domain struct {
 	ClickTracking bool        `json:"click_tracking"`
 	Receiving     bool        `json:"receiving"`
 	Records       []DNSRecord `json:"records"`
+	// DNS is where the domain's DNS is hosted, from its NS records; nil until found.
+	DNS *DNSHost `json:"dns"`
+}
+
+// DNSHost is where a domain's DNS is hosted. Zone is where the records go (acme.com for mail.acme.com); Provider is
+// cloudflare, aliyun, dnspod, godaddy, namecheap or route53, or "" when not recognized.
+type DNSHost struct {
+	Zone     string `json:"zone"`
+	Provider string `json:"provider"`
+}
+
+// DNSSetupResult is what happened to one record. Outcome is created; exists (already there, left alone); updated
+// (already there but proxied, now DNS only); conflict (another value at that name, left alone: see Existing); or
+// failed (Cloudflare refused: see Message).
+type DNSSetupResult struct {
+	Purpose  string   `json:"purpose"`
+	Type     string   `json:"type"`
+	Name     string   `json:"name"`
+	Outcome  string   `json:"outcome"`
+	Existing []string `json:"existing,omitempty"`
+	Message  string   `json:"message,omitempty"`
+}
+
+// DNSSetup is the answer of DomainsService.AddToCloudflare: the Cloudflare zone the records went into, each record,
+// and the domain checked again.
+type DNSSetup struct {
+	Object   string           `json:"object"`
+	Provider string           `json:"provider"`
+	Zone     string           `json:"zone"`
+	Results  []DNSSetupResult `json:"results"`
+	Domain   Domain           `json:"domain"`
 }
 
 // UpdateDomainParams changes only what is set.
@@ -487,7 +539,8 @@ type ReceivingQuota struct {
 	OverQuota int64 `json:"over_quota"`
 }
 
-// Usage is how much of the workspace's quotas is used. Attachments are bytes this month.
+// Usage is how much of the workspace's quotas is used. Attachments are bytes this month. RampUntil is until when a new
+// workspace has a lower daily quota (already in Today.Limit); nil when not.
 type Usage struct {
 	Object  string `json:"object"`
 	Today   Quota  `json:"today"`
@@ -501,6 +554,7 @@ type Usage struct {
 		Today ReceivingQuota `json:"today"`
 		Month ReceivingQuota `json:"month"`
 	} `json:"receiving"`
+	RampUntil        *time.Time `json:"ramp_until"`
 	RetentionDays    *int       `json:"retention_days"`
 	MaxRetentionDays *int       `json:"max_retention_days"`
 	PausedAt         *time.Time `json:"paused_at"`

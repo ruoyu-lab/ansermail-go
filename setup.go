@@ -11,13 +11,10 @@ import (
 // DomainsService manages sending domains.
 type DomainsService struct{ c *Client }
 
-// Create adds a domain and its SES identity; add the DNS records it returns. Region may be "".
-func (s *DomainsService) Create(ctx context.Context, name, region string, options ...RequestOption) (*Domain, error) {
+// Create adds a domain and its SES identity; add the DNS records it returns.
+func (s *DomainsService) Create(ctx context.Context, name string, options ...RequestOption) (*Domain, error) {
 	var out Domain
 	body := map[string]string{"name": name}
-	if region != "" {
-		body["region"] = region
-	}
 	return &out, s.c.do(ctx, &call{method: http.MethodPost, path: "/domains", body: body}, &out, options)
 }
 
@@ -43,6 +40,14 @@ func (s *DomainsService) Update(ctx context.Context, id string, params *UpdateDo
 func (s *DomainsService) Verify(ctx context.Context, id string, options ...RequestOption) (*Domain, error) {
 	var out Domain
 	return &out, s.c.do(ctx, &call{method: http.MethodPost, path: "/domains/" + escape(id) + "/verify"}, &out, options)
+}
+
+// AddToCloudflare adds the records that are not in effect yet at Cloudflare, with an API token that can edit the
+// zone's DNS. The token is used for this call only and never stored.
+func (s *DomainsService) AddToCloudflare(ctx context.Context, id, token string, options ...RequestOption) (*DNSSetup, error) {
+	var out DNSSetup
+	body := map[string]string{"token": token}
+	return &out, s.c.do(ctx, &call{method: http.MethodPost, path: "/domains/" + escape(id) + "/dns/cloudflare", body: body}, &out, options)
 }
 
 // Delete deletes a domain.
@@ -121,10 +126,11 @@ func (s *WebhooksService) Test(ctx context.Context, id string, options ...Reques
 // SuppressionsService manages the addresses that are never sent to.
 type SuppressionsService struct{ c *Client }
 
-// ListSuppressionsParams: Q matches the address.
+// ListSuppressionsParams: Q matches the address; Reason keeps one reason (hard_bounce, complaint or manual).
 type ListSuppressionsParams struct {
 	ListParams
-	Q string
+	Q      string
+	Reason string
 }
 
 func (p *ListSuppressionsParams) values() url.Values {
@@ -133,6 +139,7 @@ func (p *ListSuppressionsParams) values() url.Values {
 	}
 	v := p.ListParams.values()
 	set(v, "q", p.Q)
+	set(v, "reason", p.Reason)
 	return v
 }
 

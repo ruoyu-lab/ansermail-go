@@ -47,6 +47,36 @@ batch, err := client.Emails.SendBatch(ctx, &ansermail.SendBatchParams{
 Every send, batch, reply and forward carries an idempotency key, so a retry never sends twice. Pass your own to make a
 repeated call (a job that runs again) safe too: `client.Emails.Send(ctx, params, ansermail.WithIdempotencyKey("welcome-"+userID))`.
 
+## Templates
+
+Templates are Handlebars (`{{name}}`, `{{#if}}`, `{{#each}}`, helpers like `formatDate`). Edits change the draft; publishing
+saves it as the next version, and emails always use the latest published version. A variable the template prints but the
+call does not give refuses the email (`template_variable_missing`).
+
+```go
+_, err = client.Templates.Create(ctx, &ansermail.CreateTemplateParams{
+	Name:    "Welcome",
+	Alias:   "welcome", // send and look it up by this instead of the ID
+	Subject: "Welcome, {{name}}",
+	HTML:    "<p>Hi {{name}}</p>{{#if coupon}}<p>Your code: {{coupon}}</p>{{/if}}",
+	From:    &ansermail.Address{Email: "hello@acme.com", Name: "Acme"}, // used when the email gives none
+})
+_, err = client.Templates.Publish(ctx, "welcome") // version 1
+
+// Variables: a map, or a struct with json tags. From, Subject and ReplyTo set here win over the template's.
+_, err = client.Emails.Send(ctx, &ansermail.SendEmailParams{
+	To:       []ansermail.Address{{Email: "amy@example.com"}},
+	Template: &ansermail.TemplateRef{ID: "welcome", Variables: map[string]any{"name": "Amy", "coupon": "HELLO10"}},
+})
+
+// try a change out without storing it; every field's problems come back together in Errors
+result, err := client.Templates.Render(ctx, &ansermail.RenderTemplateParams{HTML: "<p>{{name}}</p>", Variables: map[string]any{"name": "Amy"}})
+
+_, err = client.Templates.Update(ctx, "welcome", &ansermail.UpdateTemplateParams{Subject: ansermail.Ptr("Hello, {{name}}")}) // the draft only
+versions, err := client.Templates.Versions(ctx, "welcome")
+_, err = client.Templates.Restore(ctx, "welcome", 1) // back into the draft; publish to send it again
+```
+
 ## Lists
 
 ```go

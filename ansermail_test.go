@@ -126,7 +126,7 @@ func TestNeverRepeatsACreateWithoutAKey(t *testing.T) {
 		return 503, nil, apiError("internal_error")
 	}
 	client := NewClient("ms_test", WithBaseURL(s.server.URL))
-	_, err := client.Domains.Create(context.Background(), "acme.com", "")
+	_, err := client.Domains.Create(context.Background(), "acme.com")
 	var apiErr *Error
 	if !errors.As(err, &apiErr) || apiErr.StatusCode != 503 || len(s.requests) != 1 {
 		t.Fatalf("err %v, %d requests", err, len(s.requests))
@@ -194,6 +194,59 @@ func TestSendsABatch(t *testing.T) {
 	r := s.requests[0]
 	if r.Path != "/v1/emails/batch" || r.Body["atomic"] != false || len(r.Body["emails"].([]any)) != 1 {
 		t.Fatalf("request %s %v", r.Path, r.Body)
+	}
+}
+
+func TestTemplates(t *testing.T) {
+	s := newStub(t)
+	s.answer = func(r recorded, _ int) (int, http.Header, string) {
+		if strings.HasSuffix(r.Path, "/versions") {
+			return 200, nil, `{"object":"list","has_more":false,"data":[{"version":2,"published_by":null}]}`
+		}
+		return 200, nil, `{"object":"template","id":"t1","alias":"welcome","draft":{"subject":"Hi {{name}}","variables":["name"]},"published":{"version":2,"html":"<p>Hi</p>","published_at":"2026-11-27T10:00:00Z"}}`
+	}
+	client := NewClient("ms_test", WithBaseURL(s.server.URL))
+	ctx := context.Background()
+
+	if _, err := client.Emails.Send(ctx, &SendEmailParams{
+		To: []Address{{Email: "amy@example.com"}},
+		Template: &TemplateRef{ID: "welcome", Variables: struct {
+			Name string `json:"name"`
+		}{"Amy"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	created, err := client.Templates.Create(ctx, &CreateTemplateParams{Name: "Welcome", Alias: "welcome", HTML: "<p>Hi {{name}}</p>"})
+	if err != nil || *created.Alias != "welcome" || created.Published.Version != 2 || *created.Published.HTML != "<p>Hi</p>" {
+		t.Fatalf("created %+v, %v", created, err)
+	}
+	if _, err := client.Templates.Update(ctx, "welcome", &UpdateTemplateParams{Subject: Ptr("Hi {{name}}"), From: &Address{}, ReplyTo: Ptr([]Address{})}); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = client.Templates.Publish(ctx, "welcome")
+	_, _ = client.Templates.Restore(ctx, "welcome", 2)
+	_, _ = client.Templates.Duplicate(ctx, "a/b", "")
+	versions, err := client.Templates.Versions(ctx, "welcome")
+	if err != nil || len(versions) != 1 || versions[0].Version != 2 || versions[0].PublishedBy != nil {
+		t.Fatalf("versions %+v, %v", versions, err)
+	}
+
+	got := []string{}
+	for _, r := range s.requests {
+		body, _ := json.Marshal(r.Body)
+		got = append(got, r.Method+" "+r.Path+" "+string(body))
+	}
+	want := []string{
+		`POST /v1/emails {"template":{"id":"welcome","variables":{"name":"Amy"}},"to":["amy@example.com"]}`,
+		`POST /v1/templates {"alias":"welcome","html":"\u003cp\u003eHi {{name}}\u003c/p\u003e","name":"Welcome"}`,
+		`PATCH /v1/templates/welcome {"from":"","reply_to":[],"subject":"Hi {{name}}"}`,
+		`POST /v1/templates/welcome/publish null`,
+		`POST /v1/templates/welcome/versions/2/restore null`,
+		`POST /v1/templates/a%2Fb/duplicate {}`,
+		`GET /v1/templates/welcome/versions null`,
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("requests\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }
 

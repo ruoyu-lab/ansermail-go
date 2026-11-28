@@ -8,6 +8,13 @@
 //		HTML:    "<p>Hi Amy</p>",
 //		Tags:    ansermail.Tags{"category": "welcome"},
 //	})
+//
+// Or with a published template, by its alias:
+//
+//	email, err := client.Emails.Send(ctx, &ansermail.SendEmailParams{
+//		To:       []ansermail.Address{{Email: "amy@example.com"}},
+//		Template: &ansermail.TemplateRef{ID: "welcome", Variables: map[string]any{"name": "Amy"}},
+//	})
 package ansermail
 
 import (
@@ -43,6 +50,7 @@ type Client struct {
 	headers    http.Header
 
 	Emails          *EmailsService
+	Templates       *TemplatesService
 	Inbox           *InboxService
 	ForwardingRules *ForwardingRulesService
 	Domains         *DomainsService
@@ -91,6 +99,7 @@ func NewClient(apiKey string, options ...Option) *Client {
 		option(c)
 	}
 	c.Emails = &EmailsService{c}
+	c.Templates = &TemplatesService{c}
 	c.Inbox = &InboxService{c}
 	c.ForwardingRules = &ForwardingRulesService{c}
 	c.Domains = &DomainsService{c}
@@ -103,6 +112,9 @@ func NewClient(apiKey string, options ...Option) *Client {
 	c.Logs = &LogsService{c}
 	return c
 }
+
+// Ptr returns a pointer to v, for the fields of update params that are left alone when nil.
+func Ptr[T any](v T) *T { return &v }
 
 // RequestOption changes one request.
 type RequestOption func(*call)
