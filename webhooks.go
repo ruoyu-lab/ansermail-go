@@ -1,4 +1,4 @@
-package ansermail
+package anser
 
 import (
 	"crypto/hmac"

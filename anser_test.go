@@ -1,4 +1,4 @@
-package ansermail
+package anser
 
 import (
 	"context"
@@ -88,7 +88,7 @@ func TestSendsWithAKeyBytesAndATime(t *testing.T) {
 		t.Fatalf("from %s, to %s, tags %s", from, to, tags)
 	}
 	if r.Header.Get("Authorization") != "Bearer ms_test" || !uuidKey.MatchString(r.Header.Get("Idempotency-Key")) ||
-		!strings.HasPrefix(r.Header.Get("User-Agent"), "ansermail-go/") {
+		!strings.HasPrefix(r.Header.Get("User-Agent"), "anser-mail-go/") {
 		t.Fatalf("headers %v", r.Header)
 	}
 	attachment := r.Body["attachments"].([]any)[0].(map[string]any)

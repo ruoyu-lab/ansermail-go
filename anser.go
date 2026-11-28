@@ -1,21 +1,21 @@
-// Package ansermail is the SDK for 鸿雁 / Anser: send and receive email through its HTTP API.
+// Package anser is the SDK for 鸿雁 / Anser Mail: send and receive email through its HTTP API.
 //
-//	client := ansermail.NewClient("ms_…")
-//	email, err := client.Emails.Send(ctx, &ansermail.SendEmailParams{
-//		From:    ansermail.Address{Email: "hello@acme.com", Name: "Acme"},
-//		To:      []ansermail.Address{{Email: "amy@example.com", Name: "Amy"}},
+//	client := anser.NewClient("ms_…")
+//	email, err := client.Emails.Send(ctx, &anser.SendEmailParams{
+//		From:    anser.Address{Email: "hello@acme.com", Name: "Acme"},
+//		To:      []anser.Address{{Email: "amy@example.com", Name: "Amy"}},
 //		Subject: "Welcome",
 //		HTML:    "<p>Hi Amy</p>",
-//		Tags:    ansermail.Tags{"category": "welcome"},
+//		Tags:    anser.Tags{"category": "welcome"},
 //	})
 //
 // Or with a published template, by its alias:
 //
-//	email, err := client.Emails.Send(ctx, &ansermail.SendEmailParams{
-//		To:       []ansermail.Address{{Email: "amy@example.com"}},
-//		Template: &ansermail.TemplateRef{ID: "welcome", Variables: map[string]any{"name": "Amy"}},
+//	email, err := client.Emails.Send(ctx, &anser.SendEmailParams{
+//		To:       []anser.Address{{Email: "amy@example.com"}},
+//		Template: &anser.TemplateRef{ID: "welcome", Variables: map[string]any{"name": "Amy"}},
 //	})
-package ansermail
+package anser
 
 import (
 	"bytes"
@@ -36,7 +36,7 @@ import (
 )
 
 // Version of this SDK.
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 // DefaultBaseURL is the hosted service.
 const DefaultBaseURL = "https://mail.ruoyulab.dev"
@@ -149,7 +149,7 @@ func (c *Client) do(ctx context.Context, cl *call, out any, options []RequestOpt
 		return nil
 	}
 	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("ansermail: decoding the answer to %s %s: %w", cl.method, cl.path, err)
+		return fmt.Errorf("anser: decoding the answer to %s %s: %w", cl.method, cl.path, err)
 	}
 	return nil
 }
@@ -159,7 +159,7 @@ func (c *Client) send(ctx context.Context, cl *call, options []RequestOption) ([
 		option(cl)
 	}
 	if c.apiKey == "" {
-		return nil, errors.New("ansermail: missing API key: pass one to NewClient or set ANSER_API_KEY")
+		return nil, errors.New("anser: missing API key: pass one to NewClient or set ANSER_API_KEY")
 	}
 	target := c.baseURL + "/v1" + cl.path
 	if len(cl.query) > 0 {
@@ -169,7 +169,7 @@ func (c *Client) send(ctx context.Context, cl *call, options []RequestOption) ([
 	if cl.body != nil {
 		var err error
 		if payload, err = json.Marshal(cl.body); err != nil {
-			return nil, fmt.Errorf("ansermail: encoding the request: %w", err)
+			return nil, fmt.Errorf("anser: encoding the request: %w", err)
 		}
 	}
 	// A POST runs again only when the server can tell it is the same request
@@ -184,7 +184,7 @@ func (c *Client) send(ctx context.Context, cl *call, options []RequestOption) ([
 			req.Header[name] = values
 		}
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
-		req.Header.Set("User-Agent", "ansermail-go/"+Version)
+		req.Header.Set("User-Agent", "anser-mail-go/"+Version)
 		req.Header.Set("Accept", "application/json")
 		if payload != nil {
 			req.Header.Set("Content-Type", "application/json")

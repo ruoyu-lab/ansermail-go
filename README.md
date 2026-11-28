@@ -1,29 +1,29 @@
-# ansermail-go
+# anser-mail-go
 
-The Go SDK for [Anser](https://mail.ruoyulab.dev): send and receive email through its HTTP API. Go 1.23+, the standard
+The Go SDK for [Anser Mail](https://mail.ruoyulab.dev): send and receive email through its HTTP API. Go 1.23+, the standard
 library only.
 
 ## Install
 
 ```bash
-go get github.com/ruoyu-lab/ansermail-go
+go get github.com/ruoyu-lab/anser-mail-go
 ```
 
 ## Sending
 
 ```go
-import "github.com/ruoyu-lab/ansermail-go"
+import "github.com/ruoyu-lab/anser-mail-go"
 
-client := ansermail.NewClient("ms_…") // or NewClient("") with ANSER_API_KEY set
+client := anser.NewClient("ms_…") // or NewClient("") with ANSER_API_KEY set
 
 at := time.Now().Add(time.Hour)
-sent, err := client.Emails.Send(ctx, &ansermail.SendEmailParams{
-	From:        ansermail.Address{Email: "hello@acme.com", Name: "Acme"},
-	To:          []ansermail.Address{{Email: "amy@example.com", Name: "Amy"}},
+sent, err := client.Emails.Send(ctx, &anser.SendEmailParams{
+	From:        anser.Address{Email: "hello@acme.com", Name: "Acme"},
+	To:          []anser.Address{{Email: "amy@example.com", Name: "Amy"}},
 	Subject:     "Welcome",
 	HTML:        "<p>Hi Amy</p>",
-	Attachments: []ansermail.Attachment{{Filename: "invoice.pdf", Content: pdf}}, // raw bytes
-	Tags:        ansermail.Tags{"category": "welcome"},
+	Attachments: []anser.Attachment{{Filename: "invoice.pdf", Content: pdf}}, // raw bytes
+	Tags:        anser.Tags{"category": "welcome"},
 	ScheduledAt: &at, // optional, up to 30 days
 })
 // sent has the ID, status, recipients and tags
@@ -34,10 +34,10 @@ _, err = client.Emails.Cancel(ctx, sent.ID)
 
 // up to 100; all or none, unless Atomic is false
 atomic := false
-batch, err := client.Emails.SendBatch(ctx, &ansermail.SendBatchParams{
-	Emails: []ansermail.SendEmailParams{
-		{From: ansermail.Address{Email: "hello@acme.com"}, To: []ansermail.Address{{Email: "amy@example.com"}}, Subject: "Hi", Text: "Hi Amy"},
-		{From: ansermail.Address{Email: "hello@acme.com"}, To: []ansermail.Address{{Email: "bob@example.com"}}, Subject: "Hi", Text: "Hi Bob"},
+batch, err := client.Emails.SendBatch(ctx, &anser.SendBatchParams{
+	Emails: []anser.SendEmailParams{
+		{From: anser.Address{Email: "hello@acme.com"}, To: []anser.Address{{Email: "amy@example.com"}}, Subject: "Hi", Text: "Hi Amy"},
+		{From: anser.Address{Email: "hello@acme.com"}, To: []anser.Address{{Email: "bob@example.com"}}, Subject: "Hi", Text: "Hi Bob"},
 	},
 	Atomic: &atomic,
 })
@@ -45,7 +45,7 @@ batch, err := client.Emails.SendBatch(ctx, &ansermail.SendBatchParams{
 ```
 
 Every send, batch, reply and forward carries an idempotency key, so a retry never sends twice. Pass your own to make a
-repeated call (a job that runs again) safe too: `client.Emails.Send(ctx, params, ansermail.WithIdempotencyKey("welcome-"+userID))`.
+repeated call (a job that runs again) safe too: `client.Emails.Send(ctx, params, anser.WithIdempotencyKey("welcome-"+userID))`.
 
 ## Templates
 
@@ -54,25 +54,25 @@ saves it as the next version, and emails always use the latest published version
 call does not give refuses the email (`template_variable_missing`).
 
 ```go
-_, err = client.Templates.Create(ctx, &ansermail.CreateTemplateParams{
+_, err = client.Templates.Create(ctx, &anser.CreateTemplateParams{
 	Name:    "Welcome",
 	Alias:   "welcome", // send and look it up by this instead of the ID
 	Subject: "Welcome, {{name}}",
 	HTML:    "<p>Hi {{name}}</p>{{#if coupon}}<p>Your code: {{coupon}}</p>{{/if}}",
-	From:    &ansermail.Address{Email: "hello@acme.com", Name: "Acme"}, // used when the email gives none
+	From:    &anser.Address{Email: "hello@acme.com", Name: "Acme"}, // used when the email gives none
 })
 _, err = client.Templates.Publish(ctx, "welcome") // version 1
 
 // Variables: a map, or a struct with json tags. From, Subject and ReplyTo set here win over the template's.
-_, err = client.Emails.Send(ctx, &ansermail.SendEmailParams{
-	To:       []ansermail.Address{{Email: "amy@example.com"}},
-	Template: &ansermail.TemplateRef{ID: "welcome", Variables: map[string]any{"name": "Amy", "coupon": "HELLO10"}},
+_, err = client.Emails.Send(ctx, &anser.SendEmailParams{
+	To:       []anser.Address{{Email: "amy@example.com"}},
+	Template: &anser.TemplateRef{ID: "welcome", Variables: map[string]any{"name": "Amy", "coupon": "HELLO10"}},
 })
 
 // try a change out without storing it; every field's problems come back together in Errors
-result, err := client.Templates.Render(ctx, &ansermail.RenderTemplateParams{HTML: "<p>{{name}}</p>", Variables: map[string]any{"name": "Amy"}})
+result, err := client.Templates.Render(ctx, &anser.RenderTemplateParams{HTML: "<p>{{name}}</p>", Variables: map[string]any{"name": "Amy"}})
 
-_, err = client.Templates.Update(ctx, "welcome", &ansermail.UpdateTemplateParams{Subject: ansermail.Ptr("Hello, {{name}}")}) // the draft only
+_, err = client.Templates.Update(ctx, "welcome", &anser.UpdateTemplateParams{Subject: anser.Ptr("Hello, {{name}}")}) // the draft only
 versions, err := client.Templates.Versions(ctx, "welcome")
 _, err = client.Templates.Restore(ctx, "welcome", 1) // back into the draft; publish to send it again
 ```
@@ -80,9 +80,9 @@ _, err = client.Templates.Restore(ctx, "welcome", 1) // back into the draft; pub
 ## Lists
 
 ```go
-page, err := client.Emails.List(ctx, &ansermail.ListEmailsParams{ListParams: ansermail.ListParams{Limit: 50}, Status: "bounced"})
+page, err := client.Emails.List(ctx, &anser.ListEmailsParams{ListParams: anser.ListParams{Limit: 50}, Status: "bounced"})
 
-for email, err := range client.Emails.All(ctx, &ansermail.ListEmailsParams{Status: "bounced"}) {
+for email, err := range client.Emails.All(ctx, &anser.ListEmailsParams{Status: "bounced"}) {
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ for email, err := range client.Emails.All(ctx, &ansermail.ListEmailsParams{Statu
 ```go
 address, err := client.Inbox.Address(ctx) // the workspace's test address
 
-unread := &ansermail.ListReceivedParams{To: []string{"support@acme.com"}, Read: ansermail.Ptr(false)}
+unread := &anser.ListReceivedParams{To: []string{"support@acme.com"}, Read: anser.Ptr(false)}
 for received, err := range client.Inbox.All(ctx, unread) {
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ for received, err := range client.Inbox.All(ctx, unread) {
 	if email.StrippedText != nil {
 		fmt.Println(*email.StrippedText) // what the sender wrote, without the quoted history
 	}
-	_, err = client.Inbox.Reply(ctx, received.ID, &ansermail.ReplyParams{Text: "Thanks, we are on it."})
+	_, err = client.Inbox.Reply(ctx, received.ID, &anser.ReplyParams{Text: "Thanks, we are on it."})
 	_, err = client.Inbox.SetRead(ctx, received.ID, true) // read state is shared by the workspace
 }
 
@@ -122,8 +122,8 @@ _, err = client.ForwardingRules.Create(ctx, "support@acme.com", "me@example.com"
 ```go
 http.HandleFunc("POST /anser", func(w http.ResponseWriter, r *http.Request) {
 	payload, _ := io.ReadAll(r.Body) // the body exactly as it arrived
-	event, err := ansermail.VerifyWebhook(payload, r.Header, os.Getenv("ANSER_WEBHOOK_SECRET"))
-	if err != nil { // errors.Is(err, ansermail.ErrWebhookVerification)
+	event, err := anser.VerifyWebhook(payload, r.Header, os.Getenv("ANSER_WEBHOOK_SECRET"))
+	if err != nil { // errors.Is(err, anser.ErrWebhookVerification)
 		http.Error(w, "bad signature", http.StatusBadRequest)
 		return
 	}
@@ -140,8 +140,8 @@ http.HandleFunc("POST /anser", func(w http.ResponseWriter, r *http.Request) {
 
 ```go
 _, err := client.Emails.Send(ctx, params)
-var apiErr *ansermail.Error
-var connErr *ansermail.ConnectionError
+var apiErr *anser.Error
+var connErr *anser.ConnectionError
 switch {
 case errors.As(err, &apiErr):
 	_ = apiErr.StatusCode // 422
@@ -156,11 +156,11 @@ case errors.As(err, &connErr):
 ## Options
 
 ```go
-client := ansermail.NewClient("ms_…",
-	ansermail.WithBaseURL("https://mail.ruoyulab.dev"), // default: ANSER_BASE_URL, then the hosted service
-	ansermail.WithMaxRetries(2), // rate limits always; server errors and lost connections only when safe to repeat
-	ansermail.WithHTTPClient(&http.Client{Timeout: 60 * time.Second}), // its Timeout is per attempt
-	ansermail.WithHeader("X-Team", "growth"), // sent with every request
+client := anser.NewClient("ms_…",
+	anser.WithBaseURL("https://mail.ruoyulab.dev"), // default: ANSER_BASE_URL, then the hosted service
+	anser.WithMaxRetries(2), // rate limits always; server errors and lost connections only when safe to repeat
+	anser.WithHTTPClient(&http.Client{Timeout: 60 * time.Second}), // its Timeout is per attempt
+	anser.WithHeader("X-Team", "growth"), // sent with every request
 )
 ```
 
