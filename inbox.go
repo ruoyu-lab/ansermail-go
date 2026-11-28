@@ -5,6 +5,7 @@ import (
 	"iter"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -13,7 +14,7 @@ type InboxService struct{ c *Client }
 
 // ListReceivedParams filters received emails. To takes up to 20 addresses; StartDate and EndDate take a day
 // (2026-11-01) or a time; Kind is message, reply, auto_reply or bounce; Status is received, blocked or
-// over_quota.
+// over_quota. Domain is the domain of the receiving address; Read set to Ptr(false) lists unread emails only.
 type ListReceivedParams struct {
 	ListParams
 	To               []string
@@ -24,6 +25,8 @@ type ListReceivedParams struct {
 	Kind             string
 	Status           string
 	InReplyToEmailID string
+	Domain           string
+	Read             *bool
 }
 
 func (p *ListReceivedParams) values() url.Values {
@@ -39,6 +42,10 @@ func (p *ListReceivedParams) values() url.Values {
 	set(v, "kind", p.Kind)
 	set(v, "status", p.Status)
 	set(v, "in_reply_to_email_id", p.InReplyToEmailID)
+	set(v, "domain", p.Domain)
+	if p.Read != nil {
+		v.Set("read", strconv.FormatBool(*p.Read))
+	}
 	return v
 }
 
@@ -63,10 +70,37 @@ func (s *InboxService) Get(ctx context.Context, id string, cidImages bool, optio
 	return &out, s.c.do(ctx, &call{method: http.MethodGet, path: "/inbox/" + escape(id), query: query}, &out, options)
 }
 
+// SetRead marks a received email read (keeping the first time) or unread; shared by the whole workspace.
+func (s *InboxService) SetRead(ctx context.Context, id string, read bool, options ...RequestOption) (*ReceivedSummary, error) {
+	var out ReceivedSummary
+	body := map[string]bool{"read": read}
+	return &out, s.c.do(ctx, &call{method: http.MethodPatch, path: "/inbox/" + escape(id), body: body}, &out, options)
+}
+
+// Mark marks up to 100 received emails read or unread and returns those marked (ids not found are skipped).
+func (s *InboxService) Mark(ctx context.Context, ids []string, read bool, options ...RequestOption) ([]ReceivedSummary, error) {
+	var out List[ReceivedSummary]
+	body := map[string]any{"ids": ids, "read": read}
+	return out.Data, s.c.do(ctx, &call{method: http.MethodPost, path: "/inbox/mark", body: body}, &out, options)
+}
+
 // Delete deletes a received email with its attachments and raw message.
 func (s *InboxService) Delete(ctx context.Context, id string, options ...RequestOption) (*Deleted, error) {
 	var out Deleted
 	return &out, s.c.do(ctx, &call{method: http.MethodDelete, path: "/inbox/" + escape(id)}, &out, options)
+}
+
+// DeleteMany deletes up to 100 received emails and returns those deleted (ids not found are skipped).
+func (s *InboxService) DeleteMany(ctx context.Context, ids []string, options ...RequestOption) ([]Deleted, error) {
+	var out List[Deleted]
+	body := map[string][]string{"ids": ids}
+	return out.Data, s.c.do(ctx, &call{method: http.MethodPost, path: "/inbox/delete", body: body}, &out, options)
+}
+
+// Summary counts the emails, and unread ones, of each receiving domain.
+func (s *InboxService) Summary(ctx context.Context, options ...RequestOption) (*InboxSummary, error) {
+	var out InboxSummary
+	return &out, s.c.do(ctx, &call{method: http.MethodGet, path: "/inbox/summary"}, &out, options)
 }
 
 // Attachments lists a received email's attachments with download links, in the order of the email.

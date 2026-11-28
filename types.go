@@ -218,6 +218,30 @@ type ReceivedSummary struct {
 	Authentication   Authentication `json:"authentication"`
 	Preview          *string        `json:"preview"`
 	Size             int64          `json:"size"`
+	// ReadAt is when someone in the workspace read it; nil while unread. Shared by the whole workspace.
+	ReadAt *time.Time `json:"read_at"`
+}
+
+// InboxDomain is one receiving domain on the inbox's front page.
+type InboxDomain struct {
+	Object string `json:"object"`
+	Domain string `json:"domain"`
+	// TestAddress is true for the domain of the workspace's test address.
+	TestAddress bool `json:"test_address"`
+	// Receiving is whether mail to it is still received.
+	Receiving      bool       `json:"receiving"`
+	Total          int        `json:"total"`
+	Unread         int        `json:"unread"`
+	LastReceivedAt *time.Time `json:"last_received_at"`
+}
+
+// InboxSummary counts the inbox by receiving domain; the totals count each email once.
+type InboxSummary struct {
+	Object         string        `json:"object"`
+	Total          int           `json:"total"`
+	Unread         int           `json:"unread"`
+	LastReceivedAt *time.Time    `json:"last_received_at"`
+	Domains        []InboxDomain `json:"domains"`
 }
 
 // Forward is a copy sent by a forwarding rule.

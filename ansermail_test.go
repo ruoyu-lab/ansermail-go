@@ -298,6 +298,37 @@ func TestInboxFiltersAndBytes(t *testing.T) {
 	}
 }
 
+func TestInboxMarksAndDeletesInBatches(t *testing.T) {
+	s := newStub(t)
+	s.answer = func(recorded, int) (int, http.Header, string) {
+		return 200, nil, `{"object":"list","has_more":false,"data":[{"id":"r1"}]}`
+	}
+	client := NewClient("ms_test", WithBaseURL(s.server.URL))
+	ctx := context.Background()
+	marked, err := client.Inbox.Mark(ctx, []string{"r1", "r2"}, true)
+	if err != nil || len(marked) != 1 || marked[0].ID != "r1" {
+		t.Fatalf("%v %v", err, marked)
+	}
+	deleted, err := client.Inbox.DeleteMany(ctx, []string{"r1"})
+	if err != nil || len(deleted) != 1 || deleted[0].ID != "r1" {
+		t.Fatalf("%v %v", err, deleted)
+	}
+	if _, err := client.Inbox.List(ctx, &ListReceivedParams{Domain: "acme.com", Read: Ptr(false)}); err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for _, r := range s.requests {
+		got = append(got, r.Method+" "+r.Path)
+	}
+	want := []string{"POST /v1/inbox/mark", "POST /v1/inbox/delete", "GET /v1/inbox?domain=acme.com&read=false"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("%v", got)
+	}
+	if ids, _ := s.requests[0].Body["ids"].([]any); len(ids) != 2 || s.requests[0].Body["read"] != true {
+		t.Fatalf("%v", s.requests[0].Body)
+	}
+}
+
 func TestTimesOutAndFailsToConnect(t *testing.T) {
 	s := newStub(t)
 	s.answer = func(recorded, int) (int, http.Header, string) {

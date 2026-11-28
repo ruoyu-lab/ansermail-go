@@ -95,7 +95,8 @@ for email, err := range client.Emails.All(ctx, &ansermail.ListEmailsParams{Statu
 ```go
 address, err := client.Inbox.Address(ctx) // the workspace's test address
 
-for received, err := range client.Inbox.All(ctx, &ansermail.ListReceivedParams{To: []string{"support@acme.com"}}) {
+unread := &ansermail.ListReceivedParams{To: []string{"support@acme.com"}, Read: ansermail.Ptr(false)}
+for received, err := range client.Inbox.All(ctx, unread) {
 	if err != nil {
 		return err
 	}
@@ -107,7 +108,11 @@ for received, err := range client.Inbox.All(ctx, &ansermail.ListReceivedParams{T
 		fmt.Println(*email.StrippedText) // what the sender wrote, without the quoted history
 	}
 	_, err = client.Inbox.Reply(ctx, received.ID, &ansermail.ReplyParams{Text: "Thanks, we are on it."})
+	_, err = client.Inbox.SetRead(ctx, received.ID, true) // read state is shared by the workspace
 }
+
+summary, err := client.Inbox.Summary(ctx) // unread counts, per receiving domain too
+_, err = client.Inbox.Mark(ctx, ids, true) // or DeleteMany(ctx, ids), up to 100 at a time
 
 _, err = client.ForwardingRules.Create(ctx, "support@acme.com", "me@example.com")
 ```
