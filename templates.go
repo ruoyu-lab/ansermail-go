@@ -67,6 +67,16 @@ type TemplateSummary struct {
 	HasUnpublishedChanges bool       `json:"has_unpublished_changes"`
 	CreatedAt             time.Time  `json:"created_at"`
 	UpdatedAt             time.Time  `json:"updated_at"`
+	// Preview is set only when listed with Preview: true.
+	Preview *TemplateSummaryPreview `json:"preview,omitempty"`
+}
+
+// TemplateSummaryPreview is the draft rendered with suggested_variables, for thumbnails. A field with a syntax error
+// is nil and Unavailable is "error"; when html or text is over 128 KB nothing is rendered ("too_large").
+type TemplateSummaryPreview struct {
+	HTML        *string `json:"html"`
+	Text        *string `json:"text"`
+	Unavailable *string `json:"unavailable"`
 }
 
 // CreateTemplateParams is a new template. Alias is 1–100 letters, digits, '.', '_' and '-', starting with a letter
@@ -93,10 +103,11 @@ type UpdateTemplateParams struct {
 	ReplyTo *[]Address `json:"reply_to,omitempty"`
 }
 
-// ListTemplatesParams filters templates: Q matches the name and the alias.
+// ListTemplatesParams filters templates: Q matches the name and the alias. Preview adds Preview to each template.
 type ListTemplatesParams struct {
 	ListParams
-	Q string
+	Q       string
+	Preview bool
 }
 
 func (p *ListTemplatesParams) values() url.Values {
@@ -105,6 +116,9 @@ func (p *ListTemplatesParams) values() url.Values {
 	}
 	v := p.ListParams.values()
 	set(v, "q", p.Q)
+	if p.Preview {
+		v.Set("preview", "true")
+	}
 	return v
 }
 

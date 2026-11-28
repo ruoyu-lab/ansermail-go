@@ -203,6 +203,9 @@ func TestTemplates(t *testing.T) {
 		if strings.HasSuffix(r.Path, "/versions") {
 			return 200, nil, `{"object":"list","has_more":false,"data":[{"version":2,"published_by":null}]}`
 		}
+		if strings.HasPrefix(r.Path, "/v1/templates?") {
+			return 200, nil, `{"object":"list","has_more":false,"data":[{"id":"t1","preview":{"html":null,"text":"Hi name","unavailable":"error"}}]}`
+		}
 		return 200, nil, `{"object":"template","id":"t1","alias":"welcome","draft":{"subject":"Hi {{name}}","variables":["name"]},"published":{"version":2,"html":"<p>Hi</p>","published_at":"2026-11-27T10:00:00Z"}}`
 	}
 	client := NewClient("ms_test", WithBaseURL(s.server.URL))
@@ -230,6 +233,13 @@ func TestTemplates(t *testing.T) {
 	if err != nil || len(versions) != 1 || versions[0].Version != 2 || versions[0].PublishedBy != nil {
 		t.Fatalf("versions %+v, %v", versions, err)
 	}
+	listed, err := client.Templates.List(ctx, &ListTemplatesParams{Q: "wel", Preview: true})
+	if err != nil || len(listed.Data) != 1 {
+		t.Fatalf("listed %+v, %v", listed, err)
+	}
+	if p := listed.Data[0].Preview; p == nil || p.HTML != nil || *p.Text != "Hi name" || *p.Unavailable != "error" {
+		t.Fatalf("preview %+v", p)
+	}
 
 	got := []string{}
 	for _, r := range s.requests {
@@ -244,6 +254,7 @@ func TestTemplates(t *testing.T) {
 		`POST /v1/templates/welcome/versions/2/restore null`,
 		`POST /v1/templates/a%2Fb/duplicate {}`,
 		`GET /v1/templates/welcome/versions null`,
+		`GET /v1/templates?preview=true&q=wel null`,
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("requests\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
